@@ -63,14 +63,19 @@ def clasificar_daño(cpr):
 
 
 def ejecutar(mejor_op="canny"):
-    """calcula metricas con el mejor operador"""
+    """calcula metricas con el mejor operador con validación mejorada"""
     dir_op = os.path.join(dir_masks, mejor_op)
 
     if not os.path.exists(dir_op):
         print(f"  error: no encontrada carpeta de mascaras para {mejor_op}")
-        return
+        return None
 
     imgs = sorted([f for f in os.listdir(dir_op) if f.lower().endswith(('.jpg', '.jpeg', '.png'))])
+
+    if not imgs:
+        print(f"  error: no hay mascaras para el operador {mejor_op}")
+        return None
+
     print(f"  calculando metricas de {len(imgs)} imagenes con {mejor_op}")
 
     registros = []
@@ -80,18 +85,25 @@ def ejecutar(mejor_op="canny"):
         if mascara is None:
             continue
 
-        metricas = calc_metricas(mascara)
-        daño = clasificar_daño(metricas["cpr"])
+        try:
+            metricas = calc_metricas(mascara)
+            daño = clasificar_daño(metricas["cpr"])
 
-        registros.append({
-            "imagen": nombre,
-            "cpr": metricas["cpr"],
-            "longitud_px": metricas["longitud_grieta_px"],
-            "num_componentes": metricas["num_componentes"],
-            "area_max": metricas["area_max_componente"],
-            "grado_daño": daño,
-            "operador": mejor_op,
-        })
+            registros.append({
+                "imagen": nombre,
+                "cpr": metricas["cpr"],
+                "longitud_px": metricas["longitud_grieta_px"],
+                "num_componentes": metricas["num_componentes"],
+                "area_max": metricas["area_max_componente"],
+                "grado_daño": daño,
+                "operador": mejor_op,
+            })
+        except Exception as e:
+            print(f"  [!] error procesando {nombre}: {e}")
+
+    if not registros:
+        print(f"  error: no se procesaron metricas para ninguna imagen")
+        return None
 
     df = pd.DataFrame(registros)
     df.to_csv(csv_salida, index=False)
@@ -99,7 +111,11 @@ def ejecutar(mejor_op="canny"):
     # resumen
     print(f"\n  resumen de daño:")
     print(df["grado_daño"].value_counts().to_string())
-    print(f"\n  ✓ {csv_salida} guardado con {len(df)} registros")
+    print(f"\n  estadísticas CPR:")
+    print(f"    - Media: {df['cpr'].mean():.3f}%")
+    print(f"    - Mínimo: {df['cpr'].min():.3f}%")
+    print(f"    - Máximo: {df['cpr'].max():.3f}%")
+    print(f"\n  [OK] {csv_salida} guardado con {len(df)} registros")
     return df
 
 

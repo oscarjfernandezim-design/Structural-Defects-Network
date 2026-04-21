@@ -30,7 +30,7 @@ def grafico_histogram_cpr(df):
     out = os.path.join(dir_graficos, "01_histograma_cpr.png")
     plt.savefig(out, dpi=150, bbox_inches="tight")
     plt.close()
-    print(f"  ✓ {out}")
+    print(f"  [OK] {out}")
 
 
 def grafico_barras_daño(df):
@@ -54,7 +54,7 @@ def grafico_barras_daño(df):
     out = os.path.join(dir_graficos, "02_barras_categorias.png")
     plt.savefig(out, dpi=150, bbox_inches="tight")
     plt.close()
-    print(f"  ✓ {out}")
+    print(f"  [OK] {out}")
 
 
 def grafico_mosaico(df, mejor_op="canny", n=9):
@@ -100,7 +100,7 @@ def grafico_mosaico(df, mejor_op="canny", n=9):
     out = os.path.join(dir_viz, "03_mosaico_comparacion.png")
     plt.savefig(out, dpi=120, bbox_inches="tight")
     plt.close()
-    print(f"  ✓ {out}")
+    print(f"  [OK] {out}")
 
 
 def grafico_fft(df):
@@ -134,7 +134,7 @@ def grafico_fft(df):
     out = os.path.join(dir_graficos, "04_fft_spectrum.png")
     plt.savefig(out, dpi=150, bbox_inches="tight")
     plt.close()
-    print(f"  ✓ {out}")
+    print(f"  [OK] {out}")
 
 
 def ejecutar(mejor_op="canny"):
@@ -154,7 +154,7 @@ def ejecutar(mejor_op="canny"):
     grafico_mosaico(df, mejor_op=mejor_op)
     grafico_fft(df)
 
-    print(f"\n  ✓ todas las visualizaciones generadas")
+    print(f"\n  [OK] todas las visualizaciones generadas")
 
 
 if __name__ == "__main__":

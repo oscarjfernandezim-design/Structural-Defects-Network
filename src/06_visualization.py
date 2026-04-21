@@ -33,7 +33,7 @@ def _plot_cpr_histogram(df):
 	out = os.path.join(GRAPHS_DIR, "01_histograma_cpr.png")
 	plt.savefig(out, dpi=150, bbox_inches="tight")
 	plt.close()
-	print(f"[OK] Histograma CPR guardado en {out}")
+	print(f"  [OK] histograma cpr guardado")
 
 
 def _plot_damage_bars(df):
@@ -67,13 +67,13 @@ def _plot_damage_bars(df):
 	out = os.path.join(GRAPHS_DIR, "02_barras_categorias.png")
 	plt.savefig(out, dpi=150, bbox_inches="tight")
 	plt.close()
-	print(f"[OK] Barras de categorias guardadas en {out}")
+	print(f"  [OK] barras de categorias guardadas")
 
 
 def _plot_mosaic(df, best_operator="canny", n=9):
 	selected = df.head(n)["imagen"].tolist()
 	if not selected:
-		print("[WARN] No hay imagenes para construir mosaico.")
+		print("  [!] no hay imagenes para construir mosaico")
 		return
 
 	rows = len(selected)
@@ -119,7 +119,7 @@ def _plot_mosaic(df, best_operator="canny", n=9):
 	out = os.path.join(VIS_DIR, "03_mosaico_comparacion.png")
 	plt.savefig(out, dpi=130, bbox_inches="tight")
 	plt.close()
-	print(f"[OK] Mosaico de comparacion guardado en {out}")
+	print(f"  [OK] mosaico de comparacion guardado")
 
 
 def _plot_fft_spectrum(df):
@@ -131,7 +131,7 @@ def _plot_fft_spectrum(df):
 	img_path = os.path.join(PROCESSED_DIR, worst_img)
 	img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
 	if img is None:
-		print(f"[WARN] No se pudo cargar imagen para FFT: {img_path}")
+		print(f"  [!] no se pudo cargar imagen para fft: {img_path}")
 		return
 
 	freq = np.fft.fft2(img)
@@ -153,35 +153,44 @@ def _plot_fft_spectrum(df):
 	out = os.path.join(GRAPHS_DIR, "04_fft_spectrum.png")
 	plt.savefig(out, dpi=150, bbox_inches="tight")
 	plt.close()
-	print(f"[OK] Espectro FFT guardado en {out}")
+	print(f"  [OK] espectro fft guardado")
 
 
-def run(best_operator="canny"):
+def ejecutar(mejor_op="canny"):
 	"""Genera todas las visualizaciones finales."""
 	os.makedirs(GRAPHS_DIR, exist_ok=True)
 	os.makedirs(VIS_DIR, exist_ok=True)
 
 	if not os.path.exists(SUMMARY_CSV):
-		print(f"[ERROR] No se encontro {SUMMARY_CSV}. Ejecuta metrics antes.")
+		print(f"  error: no encontrado {SUMMARY_CSV}. ejecuta 04_comparison.py primero")
 		return
 
 	df = pd.read_csv(SUMMARY_CSV)
 	if df.empty:
-		print(f"[ERROR] {SUMMARY_CSV} esta vacio. No hay datos para visualizar.")
+		print(f"  error: {SUMMARY_CSV} esta vacio. no hay datos para visualizar")
 		return
 
 	required = {"imagen", "cpr", "grado_daño"}
 	missing = [c for c in required if c not in df.columns]
 	if missing:
-		print(f"[ERROR] Faltan columnas en {SUMMARY_CSV}: {missing}")
+		print(f"  error: faltan columnas en {SUMMARY_CSV}: {missing}")
 		return
 
-	print(f"[INFO] Generando visualizaciones para {len(df)} imagenes...")
-	_plot_cpr_histogram(df)
-	_plot_damage_bars(df)
-	_plot_mosaic(df, best_operator=best_operator)
-	_plot_fft_spectrum(df)
-	print("[OK] Visualizaciones generadas correctamente.")
+	print(f"  generando visualizaciones para {len(df)} imagenes...")
+	try:
+		_plot_cpr_histogram(df)
+		_plot_damage_bars(df)
+		_plot_mosaic(df, best_operator=mejor_op)
+		_plot_fft_spectrum(df)
+		print("  [OK] visualizaciones generadas correctamente")
+	except Exception as e:
+		print(f"  [ERR] error generando visualizaciones: {e}")
+
+
+# Alias para compatibilidad
+def run(best_operator="canny"):
+	"""Alias de ejecutar() para compatibilidad con código anterior."""
+	return ejecutar(mejor_op=best_operator)
 
 
 if __name__ == "__main__":

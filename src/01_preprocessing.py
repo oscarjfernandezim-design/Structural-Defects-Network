@@ -12,17 +12,8 @@ tamaño = (256, 256)
 
 
 def filtro_media(img, ksize=3):
-    """aplica filtro de media(kernel 3x3)"""
-    h, w = img.shape
-    pad = ksize // 2
-    resultado = np.zeros_like(img, dtype=np.uint8)
-    
-    for i in range(pad, h - pad):
-        for j in range(pad, w - pad):
-            ventana = img[i-pad:i+pad+1, j-pad:j+pad+1]
-            resultado[i, j] = np.median(ventana)
-    
-    return resultado
+    """aplica filtro de media usando OpenCV (más eficiente que manual)"""
+    return cv2.medianBlur(img, ksize)
 
 
 def procesar_imagen(ruta_in, ruta_out):
@@ -46,22 +37,34 @@ def procesar_imagen(ruta_in, ruta_out):
 
 
 def ejecutar():
-    """procesa todas las imagenes del directorio raw"""
+    """procesa todas las imagenes del directorio raw con validación"""
     os.makedirs(dir_proc, exist_ok=True)
-    
+
     if not os.path.exists(dir_raw):
         print(f"  error: directorio {dir_raw} no existe")
-        return
-    
+        return False
+
     imgs = [f for f in os.listdir(dir_raw) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
+
+    if not imgs:
+        print(f"  error: no hay imagenes en {dir_raw}")
+        return False
+
     print(f"  procesando {len(imgs)} imagenes...")
-    
+
+    procesadas = 0
     for nombre in imgs:
         ruta_in = os.path.join(dir_raw, nombre)
         ruta_out = os.path.join(dir_proc, nombre)
-        procesar_imagen(ruta_in, ruta_out)
+        try:
+            resultado = procesar_imagen(ruta_in, ruta_out)
+            if resultado is not None:
+                procesadas += 1
+        except Exception as e:
+            print(f"  [!] error procesando {nombre}: {e}")
 
-    print(f"  ✓ imagenes guardadas en {dir_proc}/")
+    print(f"  [OK] {procesadas}/{len(imgs)} imagenes guardadas en {dir_proc}/")
+    return procesadas > 0
 
 
 if __name__ == "__main__":
