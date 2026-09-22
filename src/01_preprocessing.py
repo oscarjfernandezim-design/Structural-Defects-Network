@@ -4,7 +4,6 @@
 
 import cv2
 import os
-import numpy as np
 
 dir_raw = "data/raw"
 dir_proc = "data/processed"

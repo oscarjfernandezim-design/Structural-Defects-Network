@@ -24,8 +24,9 @@ def detectar_canny(img):
 def detectar_laplaciano(img):
     """laplaciano: segunda derivada"""
     lap = cv2.Laplacian(img.astype(np.float32), cv2.CV_32F)
-    lap = np.uint8(np.clip(np.abs(lap), 0, 255))
-    _, binaria = cv2.threshold(lap, 20, 255, cv2.THRESH_BINARY)
+    magnitud = np.abs(lap)
+    umbral = np.percentile(magnitud, 98.5)
+    binaria = np.where(magnitud >= max(umbral, 1.0), 255, 0).astype(np.uint8)
     return binaria
 
 
@@ -34,8 +35,8 @@ def detectar_sobel(img):
     sobelx = cv2.Sobel(img.astype(np.float32), cv2.CV_32F, 1, 0, ksize=3)
     sobely = cv2.Sobel(img.astype(np.float32), cv2.CV_32F, 0, 1, ksize=3)
     magnitud = np.sqrt(sobelx**2 + sobely**2)
-    magnitud = np.uint8(np.clip(magnitud / (magnitud.max() + 1e-8) * 255, 0, 255))
-    _, binaria = cv2.threshold(magnitud, 30, 255, cv2.THRESH_BINARY)
+    umbral = np.percentile(magnitud, 97.0)
+    binaria = np.where(magnitud >= max(umbral, 1.0), 255, 0).astype(np.uint8)
     return binaria
 
 
@@ -46,8 +47,8 @@ def detectar_prewitt(img):
     gx = cv2.filter2D(img.astype(np.float32), cv2.CV_32F, kx)
     gy = cv2.filter2D(img.astype(np.float32), cv2.CV_32F, ky)
     magnitud = np.sqrt(gx**2 + gy**2)
-    magnitud = np.uint8(np.clip(magnitud / (magnitud.max() + 1e-8) * 255, 0, 255))
-    _, binaria = cv2.threshold(magnitud, 30, 255, cv2.THRESH_BINARY)
+    umbral = np.percentile(magnitud, 97.0)
+    binaria = np.where(magnitud >= max(umbral, 1.0), 255, 0).astype(np.uint8)
     return binaria
 
 
@@ -58,8 +59,8 @@ def detectar_roberts(img):
     gx = cv2.filter2D(img.astype(np.float32), cv2.CV_32F, kx)
     gy = cv2.filter2D(img.astype(np.float32), cv2.CV_32F, ky)
     magnitud = np.sqrt(gx**2 + gy**2)
-    magnitud = np.uint8(np.clip(magnitud / (magnitud.max() + 1e-8) * 255, 0, 255))
-    _, binaria = cv2.threshold(magnitud, 20, 255, cv2.THRESH_BINARY)
+    umbral = np.percentile(magnitud, 97.0)
+    binaria = np.where(magnitud >= max(umbral, 1.0), 255, 0).astype(np.uint8)
     return binaria
 
 
@@ -73,25 +74,21 @@ def detectar_fft(img):
 
     h, w = img.shape
     cy, cx = h // 2, w // 2
-    radio = 100  # ← AUMENTADO de 70 a 100 para filtrar más
+    radio = min(h, w) * 0.12
 
     # mascara: deja pasar altas frecuencias (bordes)
     # usando gaussian falloff para transición suave
-    mascara = np.ones((h, w), dtype=np.float64)
-    for i in range(h):
-        for j in range(w):
-            dist = np.sqrt((j - cx)**2 + (i - cy)**2)
-            if dist <= radio:
-                # Gaussian falloff para transición suave
-                mascara[i, j] = np.exp(-(dist**2) / (2 * (radio/3)**2))
+    yy, xx = np.ogrid[:h, :w]
+    dist = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2)
+    mascara = 1.0 - np.exp(-(dist**2) / (2 * radio**2))
 
     fshift_filtrada = fshift * mascara
     f_ishift = np.fft.ifftshift(fshift_filtrada)
     img_reconstruida = np.fft.ifft2(f_ishift)
     img_reconstruida = np.abs(img_reconstruida)
 
-    img_reconstruida = np.uint8(np.clip(img_reconstruida / (img_reconstruida.max() + 1e-8) * 255, 0, 255))
-    _, binaria = cv2.threshold(img_reconstruida, 100, 255, cv2.THRESH_BINARY)  # ← AUMENTADO de 60 a 100
+    umbral = np.percentile(img_reconstruida, 99.0)
+    binaria = np.where(img_reconstruida >= max(umbral, 1e-8), 255, 0).astype(np.uint8)
     return binaria
 
 
@@ -106,11 +103,9 @@ mapa_detectores = {
 
 
 def limpiar_ruido(binaria):
-    """abre y cierra para limpiar ruido"""
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
-    abierta = cv2.morphologyEx(binaria, cv2.MORPH_OPEN, kernel, iterations=1)
-    cerrada = cv2.morphologyEx(abierta, cv2.MORPH_CLOSE, kernel, iterations=2)
-    return cerrada
+    """Conecta discontinuidades sin eliminar grietas de un pixel."""
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+    return cv2.morphologyEx(binaria, cv2.MORPH_CLOSE, kernel, iterations=1)
 
 
 def ejecutar():
