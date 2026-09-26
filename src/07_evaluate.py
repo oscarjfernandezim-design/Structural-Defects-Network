@@ -1,11 +1,11 @@
-"""Evalua las mascaras del baseline contra mascaras anotadas.
+"""Evaluate baseline masks against annotated masks.
 
-Estructura esperada:
-    data/annotated/images/<nombre>.(jpg|jpeg|png)
-    data/annotated/masks/<mismo_nombre>.(png|jpg|jpeg)
+Expected structure:
+    data/annotated/images/<name>.(jpg|jpeg|png)
+    data/annotated/masks/<same_name>.(png|jpg|jpeg)
 
-Las mascaras anotadas se consideran binarias: todo pixel distinto de cero es
-positivo. No se generan anotaciones automaticamente.
+Annotated masks are treated as binary: any non-zero pixel is positive.
+Annotations are not generated automatically.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 ANNOTATED_DIR = PROJECT_ROOT / "data" / "annotated"
 PREDICTIONS_DIR = PROJECT_ROOT / "results" / "masks"
 OUTPUT_DIR = PROJECT_ROOT / "results" / "evaluation"
-OPERATORS = ("canny", "laplaciano", "sobel", "prewitt", "roberts", "fft")
+OPERATORS = ("canny", "laplacian", "sobel", "prewitt", "roberts", "fft")
 LABEL_DIRS = {"Cracked": 1, "No-Cracked": 0}
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff"}
 
@@ -29,16 +29,16 @@ IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff"}
 def _binary_mask(path: Path, shape: tuple[int, int] | None = None) -> np.ndarray:
     mask = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
     if mask is None:
-        raise ValueError(f"no se pudo leer la mascara: {path}")
+        raise ValueError(f"Could not read mask: {path}")
     if shape is not None and mask.shape != shape:
         mask = cv2.resize(mask, (shape[1], shape[0]), interpolation=cv2.INTER_NEAREST)
     return mask > 0
 
 
 def calculate_metrics(prediction: np.ndarray, target: np.ndarray) -> dict[str, float]:
-    """Calcula metricas binarias por imagen, incluyendo casos vacios."""
+    """Calculate binary per-image metrics, including empty-mask cases."""
     if prediction.shape != target.shape:
-        raise ValueError("prediction y target deben tener la misma forma")
+        raise ValueError("prediction and target must have the same shape")
 
     prediction = prediction.astype(bool)
     target = target.astype(bool)
@@ -94,15 +94,15 @@ def evaluate_operator(
     target_dir: Path,
     prediction_dir: Path,
 ) -> pd.DataFrame:
-    """Evalua un operador usando nombres de archivo compartidos."""
+    """Evaluate one operator using matching filenames."""
     images = _indexed_files(image_dir)
     targets = _indexed_files(target_dir)
     predictions = _indexed_files(prediction_dir)
     names = sorted(set(images) & set(targets) & set(predictions))
     if not names:
         raise ValueError(
-            f"no hay nombres coincidentes entre imagenes, mascaras y predicciones "
-            f"para {operator}"
+            f"No matching filenames among images, masks, and predictions "
+            f"for {operator}"
         )
 
     rows = []
@@ -110,7 +110,13 @@ def evaluate_operator(
         target = _binary_mask(targets[name])
         prediction = _binary_mask(predictions[name], target.shape)
         metrics = calculate_metrics(prediction, target)
-        rows.append({"imagen": targets[name].name, "operador": operator, **metrics})
+        rows.append(
+            {
+                "image": targets[name].name,
+                "operator": operator,
+                **metrics,
+            }
+        )
     return pd.DataFrame(rows)
 
 
@@ -120,14 +126,14 @@ def evaluate_dataset(
     prediction_dir: Path = PREDICTIONS_DIR,
     operators: tuple[str, ...] = OPERATORS,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Evalua todos los operadores y devuelve detalle y resumen."""
+    """Evaluate all operators and return per-image details and a summary."""
     if not image_dir.is_dir():
         raise FileNotFoundError(
-            f"no existe el directorio de imagenes anotadas: {image_dir}"
+            f"Annotated image directory does not exist: {image_dir}"
         )
     if not target_dir.is_dir():
         raise FileNotFoundError(
-            f"no existe el directorio de mascaras anotadas: {target_dir}"
+            f"Annotated mask directory does not exist: {target_dir}"
         )
 
     details = []
@@ -135,7 +141,7 @@ def evaluate_dataset(
         operator_dir = prediction_dir / operator
         if not operator_dir.is_dir():
             raise FileNotFoundError(
-                f"no existe el directorio de predicciones para {operator}: {operator_dir}"
+                f"Prediction directory for {operator} does not exist: {operator_dir}"
             )
         details.append(evaluate_operator(operator, image_dir, target_dir, operator_dir))
 
@@ -150,7 +156,7 @@ def evaluate_dataset(
         "predicted_cpr",
     ]
     summary_df = (
-        detail_df.groupby("operador", as_index=False)[metric_columns]
+        detail_df.groupby("operator", as_index=False)[metric_columns]
         .mean()
         .sort_values("iou", ascending=False)
     )
@@ -162,15 +168,15 @@ def _load_folder_labels(annotation_dir: Path) -> dict[str, tuple[int, str]]:
     for folder_name, label in LABEL_DIRS.items():
         folder = annotation_dir / folder_name
         if not folder.is_dir():
-            raise FileNotFoundError(f"no existe la carpeta etiquetada: {folder}")
+            raise FileNotFoundError(f"Labeled image directory does not exist: {folder}")
         for path in folder.iterdir():
             if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS:
                 stem = path.stem
                 if stem in labels:
-                    raise ValueError(f"la imagen aparece en mas de una etiqueta: {stem}")
+                    raise ValueError(f"Image appears in more than one label directory: {stem}")
                 labels[stem] = (label, folder_name)
     if not labels:
-        raise ValueError(f"no hay imagenes etiquetadas en {annotation_dir}")
+        raise ValueError(f"No labeled images found in {annotation_dir}")
     return labels
 
 
@@ -180,14 +186,14 @@ def evaluate_folder_labels(
     operators: tuple[str, ...] = OPERATORS,
     cpr_threshold: float = 5.0,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Calibra CPR en train y evalua en test, sin contaminar la validacion."""
+    """Calibrate a CPR rule on train and evaluate it on a held-out test split."""
     labels = _load_folder_labels(annotation_dir)
     base_rows = []
     for operator in operators:
         operator_dir = prediction_dir / operator
         if not operator_dir.is_dir():
             raise FileNotFoundError(
-                f"no existe el directorio de predicciones para {operator}: {operator_dir}"
+                f"Prediction directory for {operator} does not exist: {operator_dir}"
             )
         predictions = _indexed_files(operator_dir)
         for stem, (actual, actual_label) in labels.items():
@@ -195,17 +201,17 @@ def evaluate_folder_labels(
             if prediction_path is None:
                 base_rows.append(
                     {
-                        "imagen": f"{stem} (sin prediccion)",
-                        "operador": operator,
-                        "etiqueta_real": actual_label,
-                        "real_grieta": actual,
+                        "image": f"{stem} (missing prediction)",
+                        "operator": operator,
+                        "ground_truth_label": actual_label,
+                        "crack_present": actual,
                         "cpr": np.nan,
-                        "umbral_cpr": cpr_threshold,
-                        "prediccion": "SIN_PREDICCION",
-                        "predice_grieta": np.nan,
-                        "correcto": False,
-                        "resultado": "MISSING",
-                        "particion": "missing",
+                        "cpr_threshold": cpr_threshold,
+                        "prediction": "MISSING_PREDICTION",
+                        "predicted_crack": np.nan,
+                        "correct": False,
+                        "outcome": "MISSING",
+                        "split": "missing",
                     }
                 )
                 continue
@@ -213,31 +219,31 @@ def evaluate_folder_labels(
             cpr = np.count_nonzero(mask) / mask.size * 100
             base_rows.append(
                 {
-                    "imagen": prediction_path.name,
-                    "operador": operator,
-                    "etiqueta_real": actual_label,
-                    "real_grieta": actual,
+                    "image": prediction_path.name,
+                    "operator": operator,
+                    "ground_truth_label": actual_label,
+                    "crack_present": actual,
                     "cpr": round(cpr, 4),
-                    "umbral_cpr": np.nan,
-                    "prediccion": "NO_CALCULADA",
-                    "predice_grieta": np.nan,
-                    "correcto": np.nan,
-                    "resultado": "UNSET",
-                    "particion": "unset",
+                    "cpr_threshold": np.nan,
+                    "prediction": "NOT_EVALUATED",
+                    "predicted_crack": np.nan,
+                    "correct": np.nan,
+                    "outcome": "NOT_EVALUATED",
+                    "split": "not_evaluated",
                 }
             )
 
     detail_df = pd.DataFrame(base_rows)
-    detail_df["correcto"] = detail_df["correcto"].astype(object)
-    valid = detail_df[detail_df["resultado"] != "MISSING"].copy()
-    valid["particion"] = "test"
-    for operator in valid["operador"].unique():
-        operator_rows = valid[valid["operador"] == operator]
+    detail_df["correct"] = detail_df["correct"].astype(object)
+    valid = detail_df[detail_df["outcome"] != "MISSING"].copy()
+    valid["split"] = "test"
+    for operator in valid["operator"].unique():
+        operator_rows = valid[valid["operator"] == operator]
         for label in (0, 1):
-            indexes = operator_rows.index[operator_rows["real_grieta"] == label].tolist()
+            indexes = operator_rows.index[operator_rows["crack_present"] == label].tolist()
             split_at = max(1, int(len(indexes) * 0.7))
-            valid.loc[indexes[:split_at], "particion"] = "train"
-    detail_df.loc[valid.index, "particion"] = valid["particion"]
+            valid.loc[indexes[:split_at], "split"] = "train"
+    detail_df.loc[valid.index, "split"] = valid["split"]
 
     def score_rule(y_true: np.ndarray, values: np.ndarray, threshold: float, reverse: bool) -> float:
         predicted = values <= threshold if reverse else values >= threshold
@@ -249,11 +255,11 @@ def evaluate_folder_labels(
         return 2 * precision * recall / (precision + recall) if precision + recall else 0.0
 
     summary_rows = []
-    for operator, group in detail_df.groupby("operador", sort=False):
-        train = group[group["particion"] == "train"]
-        test = group[group["particion"] == "test"]
+    for operator, group in detail_df.groupby("operator", sort=False):
+        train = group[group["split"] == "train"]
+        test = group[group["split"] == "test"]
         values = train["cpr"].to_numpy(dtype=float)
-        labels_train = train["real_grieta"].to_numpy(dtype=int)
+        labels_train = train["crack_present"].to_numpy(dtype=int)
         candidates = np.unique(values)
         candidates = np.concatenate(([cpr_threshold], candidates))
         rules = [
@@ -268,14 +274,14 @@ def evaluate_folder_labels(
             if reverse
             else evaluated["cpr"].to_numpy() >= fitted_threshold
         ).astype(int)
-        detail_df.loc[evaluated.index, "umbral_cpr"] = fitted_threshold
-        detail_df.loc[evaluated.index, "predice_grieta"] = predicted
-        detail_df.loc[evaluated.index, "prediccion"] = np.where(
+        detail_df.loc[evaluated.index, "cpr_threshold"] = fitted_threshold
+        detail_df.loc[evaluated.index, "predicted_crack"] = predicted
+        detail_df.loc[evaluated.index, "prediction"] = np.where(
             predicted, "Cracked", "No-Cracked"
         )
-        actual_test = evaluated["real_grieta"].to_numpy(dtype=int)
-        detail_df.loc[evaluated.index, "correcto"] = predicted == actual_test
-        detail_df.loc[evaluated.index, "resultado"] = [
+        actual_test = evaluated["crack_present"].to_numpy(dtype=int)
+        detail_df.loc[evaluated.index, "correct"] = predicted == actual_test
+        detail_df.loc[evaluated.index, "outcome"] = [
             "TP" if actual and pred else
             "TN" if not actual and not pred else
             "FP" if not actual and pred else
@@ -297,15 +303,15 @@ def evaluate_folder_labels(
         )
         summary_rows.append(
             {
-                "operador": operator,
-                "imagenes": len(evaluated),
-                "imagenes_etiquetadas": len(group),
-                "sin_prediccion": int((group["resultado"] == "MISSING").sum()),
-                "correctas": int(np.sum(predicted == actual)),
+                "operator": operator,
+                "evaluated_images": len(evaluated),
+                "labeled_images": len(group),
+                "missing_predictions": int((group["outcome"] == "MISSING").sum()),
+                "correct_predictions": int(np.sum(predicted == actual)),
                 "accuracy": float(np.mean(predicted == actual)),
-                "particion": "test",
-                "regla": "<=" if reverse else ">=",
-                "umbral_calibrado": fitted_threshold,
+                "split": "test",
+                "rule": "<=" if reverse else ">=",
+                "calibrated_threshold": fitted_threshold,
                 "precision": precision,
                 "recall": recall,
                 "specificity": specificity,
@@ -314,7 +320,7 @@ def evaluate_folder_labels(
                 "tn": tn,
                 "fp": fp,
                 "fn": fn,
-                "cpr_promedio": evaluated["cpr"].mean(),
+                "mean_cpr": evaluated["cpr"].mean(),
             }
         )
     summary_df = pd.DataFrame(summary_rows).sort_values("f1", ascending=False)
@@ -326,24 +332,24 @@ def write_folder_report(
     summary_df: pd.DataFrame,
     output_path: Path,
 ) -> None:
-    """Escribe un informe legible con resultados y errores por imagen."""
+    """Write a readable report with aggregate and per-image results."""
     lines = [
-        "# Evaluacion de clasificacion de grietas",
+        "# Crack Classification Evaluation",
         "",
-        "Comparacion de las carpetas `Cracked` y `No-Cracked` contra las "
-        "mascaras generadas por cada operador.",
+        "Comparison of `Cracked` and `No-Cracked` folder labels against "
+        "masks generated by each operator.",
         "",
-        "El umbral y la direccion de la regla CPR se calibran solo con el 70% "
-        "de las imagenes disponibles por clase. Las metricas reportadas usan "
-        "el 30% restante, que no participa en el ajuste.",
+        "The CPR threshold and rule direction are calibrated using only 70% "
+        "of available images in each class. Reported metrics use the remaining "
+        "30%, which is not used during calibration.",
         "",
-        "## Resumen por operador",
+        "## Summary by operator",
         "",
         "```text",
         summary_df.to_string(index=False, float_format=lambda value: f"{value:.4f}"),
         "```",
         "",
-        "## Resultados por imagen",
+        "## Per-image results",
         "",
         "```text",
         detail_df.to_string(index=False),
@@ -355,42 +361,42 @@ def write_folder_report(
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Evalua mascaras del baseline contra anotaciones binarias."
+        description="Evaluate baseline masks against binary annotations."
     )
     parser.add_argument(
         "--image-dir",
         type=Path,
         default=ANNOTATED_DIR / "images",
-        help="directorio con imagenes anotadas",
+        help="directory containing annotated images",
     )
     parser.add_argument(
         "--target-dir",
         type=Path,
         default=ANNOTATED_DIR / "masks",
-        help="directorio con mascaras anotadas",
+        help="directory containing annotated masks",
     )
     parser.add_argument(
         "--prediction-dir",
         type=Path,
         default=PREDICTIONS_DIR,
-        help="directorio results/masks del pipeline",
+        help="pipeline results/masks directory",
     )
     parser.add_argument(
         "--output-dir",
         type=Path,
         default=OUTPUT_DIR,
-        help="directorio para CSV de evaluacion",
+        help="directory for evaluation CSV files",
     )
     parser.add_argument(
         "--cpr-threshold",
         type=float,
         default=5.0,
-        help="CPR minimo para predecir Cracked (por defecto: 5.0)",
+        help="minimum CPR to predict Cracked (default: 5.0)",
     )
     parser.add_argument(
         "--folder-labels",
         action="store_true",
-        help="evalua carpetas Cracked y No-Cracked en lugar de mascaras anotadas",
+        help="evaluate Cracked and No-Cracked folders instead of annotated masks",
     )
     args = parser.parse_args()
 
@@ -409,7 +415,7 @@ def main() -> int:
             )
     except (FileNotFoundError, ValueError) as error:
         print(f"[ERR] {error}")
-        print("[INFO] agrega imagenes y mascaras anotadas antes de evaluar.")
+        print("[INFO] add annotated images and masks before running mask evaluation.")
         return 1
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -420,9 +426,9 @@ def main() -> int:
         detail_df.to_csv(detail_path, index=False)
         summary_df.to_csv(summary_path, index=False)
         write_folder_report(detail_df, summary_df, report_path)
-        print(f"[OK] detalle por imagen guardado en {detail_path}")
-        print(f"[OK] resumen guardado en {summary_path}")
-        print(f"[OK] informe guardado en {report_path}")
+        print(f"[OK] per-image details saved to {detail_path}")
+        print(f"[OK] summary saved to {summary_path}")
+        print(f"[OK] report saved to {report_path}")
         print(summary_df.to_string(index=False))
         return 0
 
@@ -431,8 +437,8 @@ def main() -> int:
     detail_df.to_csv(detail_path, index=False)
     summary_df.to_csv(summary_path, index=False)
 
-    print(f"[OK] {len(detail_df)} evaluaciones guardadas en {detail_path}")
-    print(f"[OK] resumen guardado en {summary_path}")
+    print(f"[OK] saved {len(detail_df)} evaluations to {detail_path}")
+    print(f"[OK] summary saved to {summary_path}")
     print(summary_df.to_string(index=False))
     return 0
 

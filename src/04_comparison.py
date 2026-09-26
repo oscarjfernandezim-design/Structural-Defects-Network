@@ -1,123 +1,117 @@
-"""
-04_metricas.py - calcula metricas del daño con el mejor operador
-cpr, longitud de grieta, componentes conectados, clasificacion
-"""
+"""Calculate descriptive metrics for masks from the selected operator."""
+
+import os
 
 import cv2
-import os
 import numpy as np
 import pandas as pd
 
-dir_masks = "results/masks"
-csv_salida = "results_summary.csv"
 
-# umbrales de clasificacion
-umbral_leve = 5.0
-umbral_moderado = 20.0
-
-
-def esqueletizar_manual(mascara):
-    """
-    esqueletizacion simple: calcula el numero de pixeles conectados
-    sin usar skimage, solo opencv y numpy
-    """
-    # conectar componentes pequeños
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)) # kernel de dilatacion
-    dilatada = cv2.dilate(mascara, kernel, iterations=1) # dilatar para conectar componentes pequeños
-    
-    # contar pixeles en la estructura final
-    return np.sum(dilatada > 0)
+MASKS_DIR = "results/masks"
+SUMMARY_CSV = "results_summary.csv"
+LOW_SEVERITY_THRESHOLD = 5.0
+MODERATE_SEVERITY_THRESHOLD = 20.0
+IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png")
 
 
-def calc_metricas(mascara):
-    """calcula todas las metricas de una mascara"""
-    total_pixeles = mascara.size
-    pixeles_grieta = np.count_nonzero(mascara)
-    cpr = (pixeles_grieta / total_pixeles) * 100
+def approximate_mask_length(mask):
+    """Approximate mask length by counting pixels after one dilation."""
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+    dilated = cv2.dilate(mask, kernel, iterations=1)
+    return np.sum(dilated > 0)
 
-    # longitud de grieta (aproximacion)
-    longitud_grieta = esqueletizar_manual(mascara)
 
-    # componentes conectados
-    num_etiquetas, _, stats, _ = cv2.connectedComponentsWithStats(mascara, connectivity=8)
-    num_componentes = num_etiquetas - 1
-    areas = stats[1:, cv2.CC_STAT_AREA] if num_componentes > 0 else [0]
-    area_max = int(np.max(areas)) if len(areas) > 0 else 0
+def calculate_metrics(mask):
+    """Calculate descriptive metrics for a binary mask."""
+    total_pixels = mask.size
+    active_pixels = np.count_nonzero(mask)
+    cpr = active_pixels / total_pixels * 100
+
+    approximate_length = approximate_mask_length(mask)
+    component_count_with_background, _, statistics, _ = (
+        cv2.connectedComponentsWithStats(mask, connectivity=8)
+    )
+    component_count = component_count_with_background - 1
+    component_areas = (
+        statistics[1:, cv2.CC_STAT_AREA] if component_count > 0 else [0]
+    )
+    largest_component_area = (
+        int(np.max(component_areas)) if len(component_areas) > 0 else 0
+    )
 
     return {
         "cpr": round(cpr, 4),
-        "longitud_grieta_px": int(longitud_grieta),
-        "num_componentes": num_componentes,
-        "area_max_componente": area_max,
+        "approx_crack_length_px": int(approximate_length),
+        "connected_components": component_count,
+        "largest_component_area_px": largest_component_area,
     }
 
 
-def clasificar_daño(cpr):
-    """clasifica el daño segun el cpr"""
-    if cpr < umbral_leve:
-        return "leve"
-    elif cpr < umbral_moderado:
-        return "moderado"
-    else:
-        return "severo"
+def classify_severity(cpr):
+    """Assign a descriptive severity category based on CPR."""
+    if cpr < LOW_SEVERITY_THRESHOLD:
+        return "low"
+    if cpr < MODERATE_SEVERITY_THRESHOLD:
+        return "moderate"
+    return "high"
 
 
-def ejecutar(mejor_op="canny"):
-    """calcula metricas con el mejor operador con validación mejorada"""
-    dir_op = os.path.join(dir_masks, mejor_op)
-
-    if not os.path.exists(dir_op):
-        print(f"  error: no encontrada carpeta de mascaras para {mejor_op}")
+def run(best_operator="canny"):
+    """Calculate metrics for the selected operator."""
+    operator_dir = os.path.join(MASKS_DIR, best_operator)
+    if not os.path.exists(operator_dir):
+        print(f"  error: mask directory not found for {best_operator}")
         return None
 
-    imgs = sorted([f for f in os.listdir(dir_op) if f.lower().endswith(('.jpg', '.jpeg', '.png'))])
-
-    if not imgs:
-        print(f"  error: no hay mascaras para el operador {mejor_op}")
+    image_names = sorted(
+        name
+        for name in os.listdir(operator_dir)
+        if name.lower().endswith(IMAGE_EXTENSIONS)
+    )
+    if not image_names:
+        print(f"  error: no masks found for operator {best_operator}")
         return None
 
-    print(f"  calculando metricas de {len(imgs)} imagenes con {mejor_op}")
-
-    registros = []
-    for nombre in imgs:
-        ruta_mascara = os.path.join(dir_op, nombre)
-        mascara = cv2.imread(ruta_mascara, cv2.IMREAD_GRAYSCALE)
-        if mascara is None:
+    print(
+        f"  calculating metrics for {len(image_names)} images "
+        f"with {best_operator}"
+    )
+    records = []
+    for image_name in image_names:
+        mask_path = os.path.join(operator_dir, image_name)
+        mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+        if mask is None:
             continue
 
         try:
-            metricas = calc_metricas(mascara)
-            daño = clasificar_daño(metricas["cpr"])
+            metrics = calculate_metrics(mask)
+            records.append(
+                {
+                    "image": image_name,
+                    **metrics,
+                    "damage_level": classify_severity(metrics["cpr"]),
+                    "operator": best_operator,
+                }
+            )
+        except Exception as error:
+            print(f"  [!] failed to process {image_name}: {error}")
 
-            registros.append({
-                "imagen": nombre,
-                "cpr": metricas["cpr"],
-                "longitud_px": metricas["longitud_grieta_px"],
-                "num_componentes": metricas["num_componentes"],
-                "area_max": metricas["area_max_componente"],
-                "grado_daño": daño,
-                "operador": mejor_op,
-            })
-        except Exception as e:
-            print(f"  [!] error procesando {nombre}: {e}")
-
-    if not registros:
-        print(f"  error: no se procesaron metricas para ninguna imagen")
+    if not records:
+        print("  error: metrics could not be calculated for any image")
         return None
 
-    df = pd.DataFrame(registros)
-    df.to_csv(csv_salida, index=False)
+    results = pd.DataFrame(records)
+    results.to_csv(SUMMARY_CSV, index=False)
 
-    # resumen
-    print(f"\n  resumen de daño:")
-    print(df["grado_daño"].value_counts().to_string())
-    print(f"\n  estadísticas CPR:")
-    print(f"    - Media: {df['cpr'].mean():.3f}%")
-    print(f"    - Mínimo: {df['cpr'].min():.3f}%")
-    print(f"    - Máximo: {df['cpr'].max():.3f}%")
-    print(f"\n  [OK] {csv_salida} guardado con {len(df)} registros")
-    return df
+    print("\n  descriptive severity summary:")
+    print(results["damage_level"].value_counts().to_string())
+    print("\n  CPR statistics:")
+    print(f"    - Mean: {results['cpr'].mean():.3f}%")
+    print(f"    - Minimum: {results['cpr'].min():.3f}%")
+    print(f"    - Maximum: {results['cpr'].max():.3f}%")
+    print(f"\n  [OK] saved {len(results)} records to {SUMMARY_CSV}")
+    return results
 
 
 if __name__ == "__main__":
-    ejecutar()
+    run()

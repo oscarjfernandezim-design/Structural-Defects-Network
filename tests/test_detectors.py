@@ -18,7 +18,7 @@ class DetectorTests(unittest.TestCase):
     def test_detectors_return_binary_masks(self):
         image = np.zeros((64, 64), dtype=np.uint8)
         image[30:34, 10:54] = 255
-        for name, detector in detectors.mapa_detectores.items():
+        for name, detector in detectors.EDGE_DETECTORS.items():
             with self.subTest(operator=name):
                 mask = detector(image)
                 self.assertEqual(mask.shape, image.shape)
@@ -27,7 +27,7 @@ class DetectorTests(unittest.TestCase):
     def test_cleanup_preserves_shape(self):
         image = np.zeros((32, 32), dtype=np.uint8)
         image[15, 5:25] = 255
-        cleaned = detectors.limpiar_ruido(image)
+        cleaned = detectors.clean_mask(image)
         self.assertEqual(cleaned.shape, image.shape)
 
 

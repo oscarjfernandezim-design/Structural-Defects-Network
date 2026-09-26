@@ -1,150 +1,153 @@
-"""
-02_bordes.py - deteccion de bordes con 6 operadores
-operadores: canny, laplaciano, sobel, prewitt, roberts, fft
-"""
+"""Generate candidate edge masks with six classical operators."""
+
+import os
 
 import cv2
-import os
 import numpy as np
 
 
-dir_proc = "data/processed"
-dir_masks = "results/masks"
-operadores = ["canny", "laplaciano", "sobel", "prewitt", "roberts", "fft"]
+PROCESSED_DIR = "data/processed"
+MASKS_DIR = "results/masks"
+OPERATORS = ("canny", "laplacian", "sobel", "prewitt", "roberts", "fft")
 
 
-def detectar_canny(img):
-    """canny: gradiente + non-maximum suppression + histéresis"""
-    # Aplicar un poco de suavizado primero para reducir ruido
-    img_suavizado = cv2.GaussianBlur(img, (5, 5), 1.5)
-    edges = cv2.Canny(img_suavizado, 50, 150)
-    return edges
+def detect_canny(image):
+    """Apply Canny edge detection."""
+    smoothed = cv2.GaussianBlur(image, (5, 5), 1.5)
+    return cv2.Canny(smoothed, 50, 150)
 
 
-def detectar_laplaciano(img):
-    """laplaciano: segunda derivada"""
-    lap = cv2.Laplacian(img.astype(np.float32), cv2.CV_32F)
-    magnitud = np.abs(lap)
-    umbral = np.percentile(magnitud, 98.5)
-    binaria = np.where(magnitud >= max(umbral, 1.0), 255, 0).astype(np.uint8)
-    return binaria
+def detect_laplacian(image):
+    """Apply Laplacian edge detection."""
+    laplacian = cv2.Laplacian(image.astype(np.float32), cv2.CV_32F)
+    magnitude = np.abs(laplacian)
+    threshold = np.percentile(magnitude, 98.5)
+    return np.where(magnitude >= max(threshold, 1.0), 255, 0).astype(np.uint8)
 
 
-def detectar_sobel(img):
-    """sobel: derivadas en x e y"""
-    sobelx = cv2.Sobel(img.astype(np.float32), cv2.CV_32F, 1, 0, ksize=3)
-    sobely = cv2.Sobel(img.astype(np.float32), cv2.CV_32F, 0, 1, ksize=3)
-    magnitud = np.sqrt(sobelx**2 + sobely**2)
-    umbral = np.percentile(magnitud, 97.0)
-    binaria = np.where(magnitud >= max(umbral, 1.0), 255, 0).astype(np.uint8)
-    return binaria
+def detect_sobel(image):
+    """Apply Sobel edge detection in the x and y directions."""
+    sobel_x = cv2.Sobel(image.astype(np.float32), cv2.CV_32F, 1, 0, ksize=3)
+    sobel_y = cv2.Sobel(image.astype(np.float32), cv2.CV_32F, 0, 1, ksize=3)
+    magnitude = np.sqrt(sobel_x**2 + sobel_y**2)
+    threshold = np.percentile(magnitude, 97.0)
+    return np.where(magnitude >= max(threshold, 1.0), 255, 0).astype(np.uint8)
 
 
-def detectar_prewitt(img):
-    """prewitt: derivadas con kernels specificos"""
-    kx = np.array([[-1, 0, 1], [-1, 0, 1], [-1, 0, 1]], dtype=np.float32)
-    ky = np.array([[-1, -1, -1], [0, 0, 0], [1, 1, 1]], dtype=np.float32)
-    gx = cv2.filter2D(img.astype(np.float32), cv2.CV_32F, kx)
-    gy = cv2.filter2D(img.astype(np.float32), cv2.CV_32F, ky)
-    magnitud = np.sqrt(gx**2 + gy**2)
-    umbral = np.percentile(magnitud, 97.0)
-    binaria = np.where(magnitud >= max(umbral, 1.0), 255, 0).astype(np.uint8)
-    return binaria
+def detect_prewitt(image):
+    """Apply Prewitt edge detection with custom kernels."""
+    kernel_x = np.array(
+        [[-1, 0, 1], [-1, 0, 1], [-1, 0, 1]], dtype=np.float32
+    )
+    kernel_y = np.array(
+        [[-1, -1, -1], [0, 0, 0], [1, 1, 1]], dtype=np.float32
+    )
+    gradient_x = cv2.filter2D(image.astype(np.float32), cv2.CV_32F, kernel_x)
+    gradient_y = cv2.filter2D(image.astype(np.float32), cv2.CV_32F, kernel_y)
+    magnitude = np.sqrt(gradient_x**2 + gradient_y**2)
+    threshold = np.percentile(magnitude, 97.0)
+    return np.where(magnitude >= max(threshold, 1.0), 255, 0).astype(np.uint8)
 
 
-def detectar_roberts(img):
-    """roberts: derivadas diagonales"""
-    kx = np.array([[1, 0], [0, -1]], dtype=np.float32)
-    ky = np.array([[0, 1], [-1, 0]], dtype=np.float32)
-    gx = cv2.filter2D(img.astype(np.float32), cv2.CV_32F, kx)
-    gy = cv2.filter2D(img.astype(np.float32), cv2.CV_32F, ky)
-    magnitud = np.sqrt(gx**2 + gy**2)
-    umbral = np.percentile(magnitud, 97.0)
-    binaria = np.where(magnitud >= max(umbral, 1.0), 255, 0).astype(np.uint8)
-    return binaria
+def detect_roberts(image):
+    """Apply Roberts cross edge detection."""
+    kernel_x = np.array([[1, 0], [0, -1]], dtype=np.float32)
+    kernel_y = np.array([[0, 1], [-1, 0]], dtype=np.float32)
+    gradient_x = cv2.filter2D(image.astype(np.float32), cv2.CV_32F, kernel_x)
+    gradient_y = cv2.filter2D(image.astype(np.float32), cv2.CV_32F, kernel_y)
+    magnitude = np.sqrt(gradient_x**2 + gradient_y**2)
+    threshold = np.percentile(magnitude, 97.0)
+    return np.where(magnitude >= max(threshold, 1.0), 255, 0).astype(np.uint8)
 
 
-def detectar_fft(img):
-    """
-    fft: filtro paso-altas en dominio de frecuencias
-    parámetros optimizados para detección de grietas
-    """
-    f = np.fft.fft2(img.astype(np.float64))
-    fshift = np.fft.fftshift(f)
+def detect_fft(image):
+    """Apply a high-pass filter in the frequency domain."""
+    spectrum = np.fft.fft2(image.astype(np.float64))
+    shifted_spectrum = np.fft.fftshift(spectrum)
 
-    h, w = img.shape
-    cy, cx = h // 2, w // 2
-    radio = min(h, w) * 0.12
+    height, width = image.shape
+    center_y, center_x = height // 2, width // 2
+    radius = min(height, width) * 0.12
 
-    # mascara: deja pasar altas frecuencias (bordes)
-    # usando gaussian falloff para transición suave
-    yy, xx = np.ogrid[:h, :w]
-    dist = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2)
-    mascara = 1.0 - np.exp(-(dist**2) / (2 * radio**2))
+    y_coordinates, x_coordinates = np.ogrid[:height, :width]
+    distance = np.sqrt(
+        (x_coordinates - center_x) ** 2 + (y_coordinates - center_y) ** 2
+    )
+    high_pass_mask = 1.0 - np.exp(-(distance**2) / (2 * radius**2))
 
-    fshift_filtrada = fshift * mascara
-    f_ishift = np.fft.ifftshift(fshift_filtrada)
-    img_reconstruida = np.fft.ifft2(f_ishift)
-    img_reconstruida = np.abs(img_reconstruida)
+    filtered_spectrum = shifted_spectrum * high_pass_mask
+    inverse_shifted = np.fft.ifftshift(filtered_spectrum)
+    reconstructed = np.abs(np.fft.ifft2(inverse_shifted))
 
-    umbral = np.percentile(img_reconstruida, 99.0)
-    binaria = np.where(img_reconstruida >= max(umbral, 1e-8), 255, 0).astype(np.uint8)
-    return binaria
+    threshold = np.percentile(reconstructed, 99.0)
+    return np.where(reconstructed >= max(threshold, 1e-8), 255, 0).astype(
+        np.uint8
+    )
 
 
-mapa_detectores = {
-    "canny": detectar_canny,
-    "laplaciano": detectar_laplaciano,
-    "sobel": detectar_sobel,
-    "prewitt": detectar_prewitt,
-    "roberts": detectar_roberts,
-    "fft": detectar_fft,
+EDGE_DETECTORS = {
+    "canny": detect_canny,
+    "laplacian": detect_laplacian,
+    "sobel": detect_sobel,
+    "prewitt": detect_prewitt,
+    "roberts": detect_roberts,
+    "fft": detect_fft,
 }
 
 
-def limpiar_ruido(binaria):
-    """Conecta discontinuidades sin eliminar grietas de un pixel."""
+def clean_mask(binary_mask):
+    """Connect small gaps without removing one-pixel cracks."""
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
-    return cv2.morphologyEx(binaria, cv2.MORPH_CLOSE, kernel, iterations=1)
+    return cv2.morphologyEx(binary_mask, cv2.MORPH_CLOSE, kernel, iterations=1)
 
 
-def ejecutar():
-    """aplica todos los operadores a todas las imagenes con validación"""
-    if not os.path.exists(dir_proc):
-        print(f"  error: directorio {dir_proc} no existe. ejecuta 01_preprocessing.py primero")
+def run():
+    """Apply all edge operators to every processed image."""
+    if not os.path.exists(PROCESSED_DIR):
+        print(
+            f"  error: processed image directory {PROCESSED_DIR} does not exist; "
+            "run 01_preprocessing.py first"
+        )
         return
 
-    imgs = [f for f in os.listdir(dir_proc) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
-
-    if not imgs:
-        print(f"  error: no hay imagenes procesadas en {dir_proc}")
+    image_names = [
+        name
+        for name in os.listdir(PROCESSED_DIR)
+        if name.lower().endswith((".jpg", ".jpeg", ".png"))
+    ]
+    if not image_names:
+        print(f"  error: no processed images found in {PROCESSED_DIR}")
         return
 
-    print(f"  detectando bordes en {len(imgs)} imagenes con {len(operadores)} operadores...")
+    print(
+        f"  detecting edges in {len(image_names)} images "
+        f"with {len(OPERATORS)} operators..."
+    )
+    for operator in OPERATORS:
+        os.makedirs(os.path.join(MASKS_DIR, operator), exist_ok=True)
 
-    for nom_op in operadores:
-        os.makedirs(os.path.join(dir_masks, nom_op), exist_ok=True)
-
-    procesadas = 0
-    for nombre in imgs:
-        ruta_img = os.path.join(dir_proc, nombre)
-        img = cv2.imread(ruta_img, cv2.IMREAD_GRAYSCALE)
-        if img is None:
-            print(f"  [!] no se pudo leer {nombre}")
+    processed_count = 0
+    for image_name in image_names:
+        image_path = os.path.join(PROCESSED_DIR, image_name)
+        image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+        if image is None:
+            print(f"  [!] could not read {image_name}")
             continue
 
         try:
-            for nom_op, detector in mapa_detectores.items():
-                mascara = detector(img)
-                mascara_limpia = limpiar_ruido(mascara)
-                ruta_out = os.path.join(dir_masks, nom_op, nombre)
-                cv2.imwrite(ruta_out, mascara_limpia)
-            procesadas += 1
-        except Exception as e:
-            print(f"  [!] error detectando bordes en {nombre}: {e}")
+            for operator, detector in EDGE_DETECTORS.items():
+                mask = clean_mask(detector(image))
+                output_path = os.path.join(MASKS_DIR, operator, image_name)
+                cv2.imwrite(output_path, mask)
+            processed_count += 1
+        except Exception as error:
+            print(f"  [!] edge detection failed for {image_name}: {error}")
 
-    print(f"  [OK] {procesadas}/{len(imgs)} mascaras guardadas en {dir_masks}/<operador>/")
+    print(
+        f"  [OK] saved masks for {processed_count}/{len(image_names)} "
+        f"images to {MASKS_DIR}/<operator>/"
+    )
 
 
 if __name__ == "__main__":
-    ejecutar()
+    run()

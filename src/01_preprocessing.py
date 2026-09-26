@@ -1,70 +1,72 @@
-"""
-01_preproceso.py - convierte imagenes a gris, redimensiona y mejora contraste
-"""
+"""Convert input images to grayscale, resize them, and reduce noise."""
 
-import cv2
 import os
 
-dir_raw = "data/raw"
-dir_proc = "data/processed"
-tamaño = (256, 256)
+import cv2
 
 
-def filtro_media(img, ksize=3):
-    """aplica filtro de media usando OpenCV (más eficiente que manual)"""
-    return cv2.medianBlur(img, ksize)
+RAW_DIR = "data/raw"
+PROCESSED_DIR = "data/processed"
+IMAGE_SIZE = (256, 256)
 
 
-def procesar_imagen(ruta_in, ruta_out):
-    """lee imagen, aplica gris, redimensiona y filtro de media"""
-    img = cv2.imread(ruta_in)
-    if img is None:
-        print(f"  advertencia: no se pudo leer {ruta_in}")
+def median_filter(image, kernel_size=3):
+    """Apply an OpenCV median filter."""
+    return cv2.medianBlur(image, kernel_size)
+
+
+def process_image(input_path, output_path):
+    """Read and preprocess one image."""
+    image = cv2.imread(input_path)
+    if image is None:
+        print(f"  warning: could not read {input_path}")
         return None
 
-    # gris
-    gris = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    grayscale = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    resized = cv2.resize(grayscale, IMAGE_SIZE)
+    filtered = median_filter(resized, kernel_size=3)
 
-    # redimensionar
-    redim = cv2.resize(gris, tamaño)
-
-    # filtro de media manual para suavizar y reducir ruido
-    suavizada = filtro_media(redim, ksize=3)
-
-    cv2.imwrite(ruta_out, suavizada)
-    return suavizada
+    cv2.imwrite(output_path, filtered)
+    return filtered
 
 
-def ejecutar():
-    """procesa todas las imagenes del directorio raw con validación"""
-    os.makedirs(dir_proc, exist_ok=True)
+def run():
+    """Process all images in the raw input directory."""
+    os.makedirs(PROCESSED_DIR, exist_ok=True)
 
-    if not os.path.exists(dir_raw):
-        print(f"  error: directorio {dir_raw} no existe")
+    if not os.path.exists(RAW_DIR):
+        print(f"  error: input directory {RAW_DIR} does not exist")
         return False
 
-    imgs = [f for f in os.listdir(dir_raw) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
+    image_names = [
+        name
+        for name in os.listdir(RAW_DIR)
+        if name.lower().endswith((".jpg", ".jpeg", ".png"))
+    ]
 
-    if not imgs:
-        print(f"  error: no hay imagenes en {dir_raw}")
+    if not image_names:
+        print(f"  error: no images found in {RAW_DIR}")
         return False
 
-    print(f"  procesando {len(imgs)} imagenes...")
+    print(f"  processing {len(image_names)} images...")
 
-    procesadas = 0
-    for nombre in imgs:
-        ruta_in = os.path.join(dir_raw, nombre)
-        ruta_out = os.path.join(dir_proc, nombre)
+    processed_count = 0
+    for image_name in image_names:
+        input_path = os.path.join(RAW_DIR, image_name)
+        output_path = os.path.join(PROCESSED_DIR, image_name)
         try:
-            resultado = procesar_imagen(ruta_in, ruta_out)
-            if resultado is not None:
-                procesadas += 1
-        except Exception as e:
-            print(f"  [!] error procesando {nombre}: {e}")
+            result = process_image(input_path, output_path)
+            if result is not None:
+                processed_count += 1
+        except Exception as error:
+            print(f"  [!] failed to process {image_name}: {error}")
 
-    print(f"  [OK] {procesadas}/{len(imgs)} imagenes guardadas en {dir_proc}/")
-    return procesadas > 0
+    print(
+        f"  [OK] saved {processed_count}/{len(image_names)} "
+        f"processed images to {PROCESSED_DIR}/"
+    )
+    return processed_count > 0
 
 
 if __name__ == "__main__":
-    ejecutar()
+    run()

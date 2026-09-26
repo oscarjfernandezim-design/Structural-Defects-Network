@@ -1,27 +1,27 @@
 # Structural Defects Network
 
-Pipeline reproducible de visión computacional para explorar detección de
-grietas en imágenes de infraestructura. El repositorio contiene un baseline
-clásico; **no es un sistema certificado de inspección estructural**.
+A reproducible computer-vision baseline for exploring crack candidates in
+infrastructure images. This repository contains classical image-processing
+methods; **it is not a certified structural inspection system**.
 
-## Qué hace
+## What it does
 
-1. Convierte las imágenes a escala de grises, las normaliza a `256x256` y
-   aplica un filtro de mediana.
-2. Genera máscaras candidatas con Canny, Laplaciano, Sobel, Prewitt, Roberts
-   y un filtro de altas frecuencias FFT.
-3. Calcula CPR (porcentaje de píxeles activos), componentes conectados y
-   severidad descriptiva.
-4. Si existen etiquetas en `data/annotated/Cracked` y
-   `data/annotated/No-Cracked`, calibra una regla CPR en train y reporta
-   clasificación en un conjunto test separado.
+1. Converts images to grayscale, resizes them to `256x256`, and applies a
+   median filter.
+2. Generates candidate masks with Canny, Laplacian, Sobel, Prewitt, Roberts,
+   and a high-pass FFT filter.
+3. Calculates crack pixel ratio (CPR), connected components, and descriptive
+   severity.
+4. When labels are available in `data/annotated/Cracked` and
+   `data/annotated/No-Cracked`, calibrates a CPR rule on a training split and
+   reports classification results on a separate test split.
 
-CPR es una señal de textura/bordes, no una medición física de una grieta.
-Para segmentación real se necesitan máscaras anotadas píxel a píxel.
+CPR measures active edge/texture pixels; it is not a physical measurement of
+a crack. Pixel-level segmentation evaluation requires human-annotated masks.
 
-## Instalación
+## Installation
 
-Requiere Python 3.10 o superior.
+Requires Python 3.10 or newer.
 
 ```powershell
 python -m venv .venv
@@ -30,11 +30,12 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-## Estructura
+## Project structure
 
 ```text
 .
-├── ejecutar.py
+├── run_pipeline.py
+├── app.py
 ├── requirements.txt
 ├── src/
 │   ├── 01_preprocessing.py
@@ -44,88 +45,86 @@ python -m pip install -r requirements.txt
 │   ├── 06_visualization.py
 │   └── 07_evaluate.py
 ├── data/
-│   ├── raw/                  # imágenes de entrada
-│   ├── processed/            # generado
+│   ├── raw/                  # input images
+│   ├── processed/            # generated
 │   └── annotated/
-│       ├── Cracked/          # etiqueta positiva
-│       └── No-Cracked/       # etiqueta negativa
-└── results/                  # máscaras, gráficos y evaluación generados
+│       ├── Cracked/          # positive image labels
+│       └── No-Cracked/       # negative image labels
+└── results/                  # generated masks, charts, and reports
 ```
 
-Los datos y resultados generados están excluidos de Git por `.gitignore`.
+Datasets and generated artifacts are excluded from Git via `.gitignore`.
 
-## Uso
+## Run the pipeline
 
-Coloca imágenes en `data/raw/` y ejecuta:
+Place images in `data/raw/` and run:
 
 ```powershell
-python ejecutar.py
+python run_pipeline.py
 ```
 
-El pipeline falla con código distinto de cero si una etapa no puede producir
-salida. El orquestador resuelve la raíz del proyecto y se puede invocar desde
-cualquier carpeta:
+The pipeline exits with a non-zero status if a stage cannot produce output.
+The project root is resolved automatically, so the script can be launched
+from another directory:
 
 ```powershell
-python C:\ruta\Structural-Defects-Network\ejecutar.py
+python C:\path\to\Structural-Defects-Network\run_pipeline.py
 ```
 
-Para evaluar etiquetas por carpeta:
+## Interactive demo
 
-```powershell
-python src\07_evaluate.py --folder-labels
-```
-
-### Demo interactiva
-
-Inicia la aplicación y abre la URL local que Streamlit muestra:
+Launch the Streamlit application and open the local URL printed by Streamlit:
 
 ```powershell
 streamlit run app.py
 ```
 
-La demo permite subir una imagen, elegir un detector y ver la máscara, CPR y
-predicción heurística. Requiere instalar las dependencias de
-`requirements.txt`. No es una herramienta de diagnóstico ni debe utilizarse
-para decisiones de seguridad.
+Upload an image to view the original, the Prewitt candidate mask, CPR, and a
+heuristic image-level prediction. The demo is experimental and must not be
+used for safety-critical decisions.
 
-Se generan:
+## Evaluate labeled images
+
+Run:
+
+```powershell
+python src\07_evaluate.py --folder-labels
+```
+
+The evaluation report is written to:
 
 - `results/evaluation/classification_by_image.csv`
 - `results/evaluation/classification_summary.csv`
 - `results/evaluation/classification_report.md`
 
-La evaluación usa solamente imágenes presentes simultáneamente en las
-carpetas anotadas y en `results/masks`. Las imágenes sin predicción se
-reportan explícitamente como `MISSING`.
+Only images present in both the labeled folders and generated mask folders
+are scored. Missing predictions are explicitly reported.
 
-## Interpretación de la evaluación
+## Evaluation protocol
 
-La calibración es determinista: por cada clase, el 70% de los nombres
-ordenados se usa para elegir dirección (`CPR >= umbral` o `CPR <= umbral`) y
-umbral maximizando F1; el 30% restante se usa como test. Esto evita presentar
-como precisión objetiva un umbral fijo escogido mirando todo el dataset.
+For each class, 70% of filenames in sorted order are used to select the CPR
+direction (`CPR >= threshold` or `CPR <= threshold`) and threshold by F1. The
+remaining 30% are held out for testing. This is a small, deterministic
+baseline split, not cross-validation; results may vary substantially with
+another dataset.
 
-La evaluación de carpetas mide clasificación de imagen. `IoU` y `Dice` solo
-son válidos cuando se proporcionan máscaras humanas en
-`data/annotated/images` y `data/annotated/masks`.
+Folder labels evaluate image classification. `IoU` and `Dice` are meaningful
+only when human pixel masks are provided in `data/annotated/images` and
+`data/annotated/masks`.
 
-## Calidad y limitaciones
+## Limitations
 
-- Los operadores clásicos detectan bordes, textura y ruido; no entienden la
-  semántica de una grieta.
-- El resize fijo puede perder escala física y grietas muy finas.
-- El conjunto etiquetado actual no proporciona máscaras píxel a píxel.
-- Las métricas con un dataset pequeño tienen alta incertidumbre.
-- No debe utilizarse el resultado para decisiones de seguridad sin inspección
-  experta y validación independiente.
-
-El siguiente paso científico es comparar este baseline con un clasificador
-supervisado y separar formalmente train, validación y test.
+- Classical operators detect edges, texture, and noise; they do not
+  semantically identify cracks.
+- Fixed-size resizing may discard physical scale and very thin cracks.
+- The current image labels do not include pixel-level masks.
+- The small dataset gives limited statistical confidence.
+- Expert inspection and independent validation are required before any
+  structural safety decision.
 
 ## Tests
 
-Las pruebas no requieren dependencias adicionales:
+The test suite can be run with:
 
 ```powershell
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
