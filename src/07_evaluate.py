@@ -228,6 +228,7 @@ def evaluate_folder_labels(
             )
 
     detail_df = pd.DataFrame(base_rows)
+    detail_df["correcto"] = detail_df["correcto"].astype(object)
     valid = detail_df[detail_df["resultado"] != "MISSING"].copy()
     valid["particion"] = "test"
     for operator in valid["operador"].unique():

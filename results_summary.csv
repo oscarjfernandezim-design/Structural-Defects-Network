@@ -1,6 +1,7 @@
 imagen,cpr,longitud_px,num_componentes,area_max,grado_daño,operador
 7069-1.jpg,13.8702,21348,524,402,moderado,prewitt
 7069-10.jpg,12.0041,18194,466,986,moderado,prewitt
+7069-100.jpg,12.5275,18447,386,1120,moderado,prewitt
 7069-101.jpg,12.9135,19380,383,1089,moderado,prewitt
 7069-104.jpg,12.5305,18823,420,1203,moderado,prewitt
 7069-11.jpg,11.644,17158,386,1434,moderado,prewitt
@@ -99,3 +100,4 @@ imagen,cpr,longitud_px,num_componentes,area_max,grado_daño,operador
 7069-96.jpg,12.3901,18644,428,884,moderado,prewitt
 7069-97.jpg,13.6551,20951,490,717,moderado,prewitt
 7069-98.jpg,13.5437,20655,519,649,moderado,prewitt
+7069-99.jpg,13.1348,19867,499,427,moderado,prewitt

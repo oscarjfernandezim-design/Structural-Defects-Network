@@ -76,6 +76,19 @@ Para evaluar etiquetas por carpeta:
 python src\07_evaluate.py --folder-labels
 ```
 
+### Demo interactiva
+
+Inicia la aplicación y abre la URL local que Streamlit muestra:
+
+```powershell
+streamlit run app.py
+```
+
+La demo permite subir una imagen, elegir un detector y ver la máscara, CPR y
+predicción heurística. Requiere instalar las dependencias de
+`requirements.txt`. No es una herramienta de diagnóstico ni debe utilizarse
+para decisiones de seguridad.
+
 Se generan:
 
 - `results/evaluation/classification_by_image.csv`
